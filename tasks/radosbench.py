@@ -20,8 +20,15 @@ def task(ctx, config):
         clients: [client list]
         time: <seconds to run>
         pool: <pool to use>
+        size: write size to use
         unique_pool: use a unique pool, defaults to False
-        ec_pool: create ec pool, defaults to False
+        ec_pool: create an ec pool, defaults to False
+        create_pool: create pool, defaults to False
+        erasure_code_profile:
+          name: teuthologyprofile
+          k: 2
+          m: 1
+          ruleset-failure-domain: osd
 
     example:
 
@@ -47,12 +54,13 @@ def task(ctx, config):
         (remote,) = ctx.cluster.only(role).remotes.iterkeys()
 
         pool = 'data'
-        if config.get('pool'):
-            pool = config.get('pool')
-            if pool is not 'data':
-                ctx.manager.create_pool(pool, ec_pool=config.get('ec_pool', False))
-        else:
-            pool = ctx.manager.create_pool_with_unique_name(ec_pool=config.get('ec_pool', False))
+        if config.get('create_pool', True):
+            if config.get('pool'):
+                pool = config.get('pool')
+                if pool is not 'data':
+                    ctx.manager.create_pool(pool, erasure_code_profile_name=profile_name)
+            else:
+                pool = ctx.manager.create_pool_with_unique_name(erasure_code_profile_name=profile_name)
 
         proc = remote.run(
             args=[
@@ -62,6 +70,7 @@ def task(ctx, config):
                           '{tdir}/archive/coverage',
                           'rados',
                           '--name', role,
+                          '-b', str(config.get('size', 4<<20)),
                           '-p' , pool,
                           'bench', str(config.get('time', 360)), 'write',
                           ]).format(tdir=testdir),
