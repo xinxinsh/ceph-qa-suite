@@ -8,6 +8,7 @@ import time
 
 from teuthology.orchestra.run import CommandFailedError, ConnectionLostError
 from tasks.cephfs.cephfs_test_case import CephFSTestCase
+from teuthology.packaging import get_package_version
 
 
 log = logging.getLogger(__name__)
@@ -307,19 +308,31 @@ class TestClientRecovery(CephFSTestCase):
         self.assertLess(recovery_time, self.ms_max_backoff * 2)
         self.assert_session_state(client_id, "open")
 
+
     def test_filelock(self):
         """
         Check that file lock doesn't get lost after an MDS restart
         """
-        lock_holder = self.mount_a.lock_background()
+        a_version = get_package_version(self.mount_a.client_remote, "fuse")
+        b_version = get_package_version(self.mount_b.client_remote, "fuse")
+        flock_version = "2.9"
+        flockable = False
+        if (a_version >= flock_version and b_version >= flock_version):
+            log.info("testing flock locks")
+            flockable = True
+        else:
+            log.info("not testing flock locks, machines have versions {av} and {bv}".format(
+                av=a_version,bv=b_version))
+
+        lock_holder = self.mount_a.lock_background(do_flock=flockable)
 
         self.mount_b.wait_for_visible("background_file-2")
-        self.mount_b.check_filelock()
+        self.mount_b.check_filelock(do_flock=flockable)
 
         self.fs.mds_fail_restart()
         self.fs.wait_for_state('up:active', timeout=MDS_RESTART_GRACE)
 
-        self.mount_b.check_filelock()
+        self.mount_b.check_filelock(do_flock=flockable)
 
         # Tear down the background process
         lock_holder.stdin.close()
