@@ -5,6 +5,8 @@ Teuthology task for exercising CephFS client recovery
 
 import logging
 import time
+import distutils.version as version
+import re
 
 from teuthology.orchestra.run import CommandFailedError, ConnectionLostError
 from tasks.cephfs.cephfs_test_case import CephFSTestCase
@@ -313,16 +315,28 @@ class TestClientRecovery(CephFSTestCase):
         """
         Check that file lock doesn't get lost after an MDS restart
         """
-        a_version = get_package_version(self.mount_a.client_remote, "fuse")
-        b_version = get_package_version(self.mount_b.client_remote, "fuse")
-        flock_version = "2.9"
+        a_version_str = get_package_version(self.mount_a.client_remote, "fuse")
+        b_version_str = get_package_version(self.mount_b.client_remote, "fuse")
+        flock_version_str = "2.9"
+
+        version_regex = re.compile(r"[0-9\.]+")
+        a_result = version_regex.match(a_version_str)
+        self.assertTrue(a_result)
+        b_result = version_regex.match(b_version_str)
+        self.assertTrue(b_result)
+        a_version = version.StrictVersion(a_result.group())
+        self.assertTrue(a_version)
+        b_version = version.StrictVersion(b_result.group())
+        self.assertTrue(b_version)
+        flock_version=version.StrictVersion(flock_version_str)
+
         flockable = False
         if (a_version >= flock_version and b_version >= flock_version):
             log.info("testing flock locks")
             flockable = True
         else:
             log.info("not testing flock locks, machines have versions {av} and {bv}".format(
-                av=a_version,bv=b_version))
+                av=a_version_str,bv=b_version_str))
 
         lock_holder = self.mount_a.lock_background(do_flock=flockable)
 
