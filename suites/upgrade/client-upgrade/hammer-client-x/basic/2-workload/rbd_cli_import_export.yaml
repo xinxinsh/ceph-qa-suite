@@ -1,6 +1,6 @@
 tasks:
 - workunit:
-    branch: hammer
+    branch: wip-11405-hammer
     clients:
       client.0:
         - rbd/import_export.sh
